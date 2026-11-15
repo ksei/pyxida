@@ -4,8 +4,8 @@ import io
 import re
 from urllib.parse import urlsplit
 
-from ai import WorkflowError
-from document_fonts import BODY_FONT, DISPLAY_FONT, FONT_DIR, embed_word_fonts
+from .ai import WorkflowError
+from .document_fonts import BODY_FONT, DISPLAY_FONT, FONT_DIR, embed_word_fonts
 
 PAGE_MARGIN_MM = 19
 PHOTO_WIDTH_MM = 35

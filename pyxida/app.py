@@ -1,4 +1,4 @@
-"""Pyxida. Run with python3 app.py, then open http://127.0.0.1:8765."""
+"""Pyxida web server. Run with `python -m pyxida`, then open http://127.0.0.1:8765."""
 import argparse
 import json
 import logging
@@ -12,22 +12,24 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from access import Access, env_flag, login_page
-from codex_auth import DeviceLogin, logout as codex_logout
+from .access import Access, env_flag, login_page
+from .codex_auth import DeviceLogin, logout as codex_logout
 
-import tracker
-from ai import CAREER_FIELDS, DOC_TYPES, Agent, WorkflowError, canonical_url, codex_status, evidence_text
-from checks import quality_checks
-from documents import application_bundle, extract_cv, extract_supporting, validate_cv
-from formatting import DOCUMENT_CSS, cv_identity, html_document, pdf_document, word_document
-from document_fonts import FONT_DIR, FONT_FILES
-from guard import inspect_posting
-from photos import document_photo, document_settings, normalize_photo, photo_bytes
-from storage import Store
+from . import tracker
+from .ai import CAREER_FIELDS, DOC_TYPES, Agent, WorkflowError, canonical_url, codex_status, evidence_text
+from .checks import quality_checks
+from .documents import application_bundle, extract_cv, extract_supporting, validate_cv
+from .formatting import DOCUMENT_CSS, cv_identity, html_document, pdf_document, word_document
+from .document_fonts import FONT_DIR, FONT_FILES
+from .guard import inspect_posting
+from .photos import document_photo, document_settings, normalize_photo, photo_bytes
+from .regions import DRAFT_LANGUAGES, REGIONS, get_region, preset_portals, summary as region_summary
+from .storage import Store
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent  # the package: static files
+BASE = ROOT.parent  # the project: .env and the default .data directory
 DEFAULT_FOCUS = "AML, KYC, financial crime, finance and banking; include relevant adjacent roles"
-LANGUAGES = ("English", "German", "French", "Italian")
+LANGUAGES = DRAFT_LANGUAGES
 MAX_POSTING = 30000
 MAX_DOCUMENTS = 12
 ENV_KEYS = ("CODEX_BIN", "CODEX_MODEL", "CODEX_SANDBOX", "CODEX_HOME", "APP_PASSWORD", "ALLOWED_HOSTS",
@@ -37,7 +39,7 @@ PROFILE_LINK = re.compile(r"(?:https?://)?(?:www\.)?(?:github\.com|gitlab\.com|k
 
 
 def load_env():
-    path = ROOT / ".env"
+    path = BASE / ".env"
     if path.exists():
         for line in path.read_text().splitlines():
             line = line.strip()
@@ -47,7 +49,7 @@ def load_env():
                     os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
 
 
-def preference_values(data):
+def preference_values(data, region="CH"):
     fields = ("cities", "work_style", "salary", "constraints", "focus", "permit", "depth")
     values = {}
     for key in fields:
@@ -58,7 +60,8 @@ def preference_values(data):
     if values["depth"] not in ("", "standard", "deep"):
         raise WorkflowError("Choose a standard or deep search.")
     values["depth"] = values["depth"] or "standard"
-    values["country"] = "Switzerland"
+    values["country"] = get_region(region)["name"]
+    values["search_languages"] = get_region(region)["languages"]
     return values
 
 
@@ -128,7 +131,9 @@ class Application:
         result["profile_links"] = profile_links(self.evidence(state))
         result["documents"] = [{k: v for k, v in d.items() if k != "text"} for d in state["documents"]]
         result["labels"] = {"doc_types": DOC_TYPES, "career_fields": CAREER_FIELDS,
-                            "calibration_minimum": tracker.CALIBRATION_MINIMUM}
+                            "calibration_minimum": tracker.CALIBRATION_MINIMUM, "regions": region_summary(),
+                            "draft_languages": DRAFT_LANGUAGES}
+        result["portals"] = self.region_portals(state)
         return result
 
     @staticmethod
@@ -164,7 +169,7 @@ class Application:
             if status:
                 entry["status"] = status
 
-    def research(self, job):
+    def research(self, state, job):
         """Company research with a 30-day shared cache. Failure never blocks drafting."""
         company = job.get("company", "").strip()
         if not company or company.lower() == "not stated":
@@ -173,7 +178,8 @@ class Application:
         if cached:
             return cached
         try:
-            return self.store.save_research(company, self.agent.company_research(company, job.get("location", "")))
+            return self.store.save_research(company, self.agent.company_research(
+                company, job.get("location", ""), country=get_region(state["region"])["name"]))
         except WorkflowError as e:
             if e.code in ("codex_usage", "codex_auth"):
                 raise
@@ -202,7 +208,7 @@ class Application:
                 raise WorkflowError("Please use a shorter filename.")
             cv = (extract_cv(filename, data["file"]) if data.get("file")
                   else validate_cv(data.get("text", "")))
-            prefs = preference_values(data.get("preferences", {}))
+            prefs = preference_values(data.get("preferences", {}))  # new profiles start in the default region
             profile = self.agent.profile(cv, [], prefs["focus"])
             return self.state(self.store.create(cv, filename, profile, prefs))
         profile_id = data.get("id")
@@ -256,15 +262,15 @@ class Application:
 
     # Jobs --------------------------------------------------------------------
     def search(self, state, data):
-        prefs = preference_values(data.get("preferences", state["preferences"]))
+        prefs = preference_values(data.get("preferences", state["preferences"]), state["region"])
         exclude = [h["job"].get("url") for h in state["history"].values() if h["status"] == "dismissed"]
         exclude += [a["job"].get("url") for a in state["applications"].values()]
-        portals = [{"name": p["name"], "domain": p["domain"]} for p in state["portals"] if p["enabled"]]
+        portals = [{k: p[k] for k in ("name", "domain", "hint", "preferred")} for p in self.region_portals(state) if p["enabled"]]
         shortlist = self.agent.search(state["profile"], prefs, self.evidence(state), exclude=[u for u in exclude if u],
                                       history=tracker.history_for_ranking(state["applications"]), portals=portals,
                                       context=self.context(state), depth=prefs["depth"])
         shortlist.setdefault("vetoed", [])
-        shortlist["portal_coverage"] = portal_coverage(state["portals"], shortlist)
+        shortlist["portal_coverage"] = portal_coverage(self.region_portals(state), shortlist)
         for job in shortlist["jobs"] + shortlist["vetoed"]:
             job.update(revision=state["revision"], new=job["id"] not in state["history"])
         found = {j["id"] for j in shortlist["jobs"]}
@@ -289,7 +295,7 @@ class Application:
                 raise WorkflowError("Paste the full job description, including requirements.")
         elif not canonical_url(url):
             raise WorkflowError("Paste a valid https listing URL or the job description text.")
-        prefs = preference_values(data.get("preferences", state["preferences"]))
+        prefs = preference_values(data.get("preferences", state["preferences"]), state["region"])
         job = self.agent.evaluate(state["profile"], prefs, self.evidence(state), url=url.strip(), text=text,
                                   history=tracker.history_for_ranking(state["applications"]), context=self.context(state))
         job.update(integrity=integrity, revision=state["revision"], new=job["id"] not in state["history"])
@@ -319,17 +325,39 @@ class Application:
         self.remember(state, [job], "dismissed")
         state["history"][job_id]["full_job"] = job
 
+    @staticmethod
+    def region_portals(state):
+        return [p for p in state["portals"] if p["country"] == state["region"]]
+
+    def region(self, state, data):
+        code = choice(data, "region", tuple(REGIONS))
+        state["region"] = code
+        if not self.region_portals(state):
+            state["portals"] += preset_portals(code)
+        if state["preferences"].get("permit") not in get_region(code)["permits"]:
+            state["preferences"]["permit"] = ""
+        state["preferences"].update(country=get_region(code)["name"], search_languages=get_region(code)["languages"])
+
     def portals(self, state, data):
-        action = choice(data, "action", ("add", "toggle", "remove"))
+        action = choice(data, "action", ("add", "toggle", "edit", "remove", "reset"))
+        portals = self.region_portals(state)
+        if action == "reset":
+            # Restore this country's presets; portals the user added are kept.
+            custom = [p for p in portals if not p["builtin"]]
+            others = [p for p in state["portals"] if p["country"] != state["region"]]
+            state["portals"] = others + preset_portals(state["region"]) + custom
+            return
         domain = portal_domain(data.get("domain"))
-        existing = next((p for p in state["portals"] if p["domain"] == domain), None)
+        existing = next((p for p in portals if p["domain"] == domain), None)
         if action == "add":
             name = tracker.text_field(data.get("name"), "portal name", 60) or domain
             if existing:
-                raise WorkflowError("This portal is already in your list.")
-            if len(state["portals"]) >= MAX_PORTALS:
-                raise WorkflowError(f"Keep the list to {MAX_PORTALS} portals; remove one first.")
-            state["portals"].append({"name": name, "domain": domain, "enabled": True, "builtin": False})
+                raise WorkflowError("This portal is already in your list for this country.")
+            if len(portals) >= MAX_PORTALS:
+                raise WorkflowError(f"Keep the list to {MAX_PORTALS} portals per country; remove one first.")
+            state["portals"].append({"name": name, "domain": domain, "enabled": True, "builtin": False,
+                                     "country": state["region"], "preferred": bool(data.get("preferred")),
+                                     "hint": tracker.text_field(data.get("hint"), "search hint", 300)})
             return
         if not existing:
             raise WorkflowError("This portal is not in your list.")
@@ -337,8 +365,20 @@ class Application:
             if type(data.get("enabled")) is not bool:
                 raise WorkflowError("Choose whether the portal is enabled.")
             existing["enabled"] = data["enabled"]
+        elif action == "edit":
+            if type(data.get("preferred", existing["preferred"])) is not bool:
+                raise WorkflowError("Choose whether the portal is preferred.")
+            existing["preferred"] = data.get("preferred", existing["preferred"])
+            existing["hint"] = tracker.text_field(data.get("hint", existing["hint"]), "search hint", 300)
+            if not existing["builtin"]:
+                existing["name"] = tracker.text_field(data.get("name", existing["name"]), "portal name", 60) or existing["name"]
+                if data.get("new_domain"):
+                    new_domain = portal_domain(data["new_domain"])
+                    if new_domain != domain and any(p["domain"] == new_domain for p in portals):
+                        raise WorkflowError("Another portal already uses that website.")
+                    existing["domain"] = new_domain
         elif existing["builtin"]:
-            raise WorkflowError("Built-in portals can be disabled but not removed.")
+            raise WorkflowError("Built-in portals can be switched off but not removed.")
         else:
             state["portals"].remove(existing)
 
@@ -370,9 +410,9 @@ class Application:
         draft = {"job": job, "language": language, "revision": state["revision"], "reviewed": review}
         draft["materials"] = self.agent.materials(
             state["cv"], state["discussion"], state["profile"], job, language,
-            review_context=self.research(job) if review else None,
+            review_context=self.research(state, job) if review else None,
             checker=lambda materials: self.checks(state, {"job": job, "materials": materials}),
-            style=state["style"], **self.candidate(state))
+            style=state["style"], country=get_region(state["region"])["name"], **self.candidate(state))
         draft["checks"] = self.checks(state, draft)
         state["drafts"][job_id] = draft
         if job_id not in state["applications"]:
@@ -475,7 +515,7 @@ class Application:
         stage = choice(data, "stage", tracker.STAGES)
         interviewers = tracker.text_field(data.get("interviewers"), "interviewer names", 1000)
         language = choice(data, "language", LANGUAGES, (application["submitted"] or {}).get("language", "English"))
-        research = self.research(application["job"])
+        research = self.research(state, application["job"])
         notes = None
         if interviewers:
             try:
@@ -617,7 +657,7 @@ class Application:
 
     routes = {"/api/discuss": discuss, "/api/documents": documents, "/api/resolve-conflict": resolve_conflict,
               "/api/career": career, "/api/style": style, "/api/calibrate": calibrate, "/api/expand": expand, "/api/expand-confirm": expand_confirm,
-              "/api/search": search, "/api/evaluate": evaluate, "/api/dismiss": dismiss, "/api/portals": portals,
+              "/api/search": search, "/api/evaluate": evaluate, "/api/dismiss": dismiss, "/api/portals": portals, "/api/region": region,
               "/api/selection": selection, "/api/materials": materials, "/api/checks": recheck,
               "/api/form-answers": form_answers, "/api/document-settings": document_settings,
               "/api/track": track, "/api/note": note, "/api/untrack": untrack, "/api/followup": followup,
@@ -792,7 +832,7 @@ def make_server(application, port=8765, host="127.0.0.1", access=None, allowed_h
                     self.send_bytes(photo_bytes(photo), "image/jpeg")
                 elif url.path == "/api/status":
                     self.send_json({**codex_status(), "model": os.environ.get("CODEX_MODEL", "").strip() or "Codex default",
-                                    "profiles": application.store.list(), "auth": access.enabled,
+                                    "profiles": application.store.list(), "auth": access.enabled, "regions": region_summary(),
                                     "codex_login": login.snapshot()["status"]})
                 elif url.path == "/api/profile":
                     profile_id = query.get("id", [""])[0]
@@ -917,11 +957,11 @@ def make_server(application, port=8765, host="127.0.0.1", access=None, allowed_h
 
 def main():
     load_env()
-    parser = argparse.ArgumentParser(description="Pyxida: CV-driven job search for Switzerland")
+    parser = argparse.ArgumentParser(description="Pyxida: CV-driven job search, Switzerland first")
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT") or 8765))
     parser.add_argument("--host", default=os.environ.get("HOST") or "127.0.0.1")
     args = parser.parse_args()
-    data_dir = Path(os.environ.get("DATA_DIR") or ROOT / ".data")
+    data_dir = Path(os.environ.get("DATA_DIR") or BASE / ".data")
     store = Store(data_dir)
     access = Access(os.environ.get("APP_PASSWORD", ""), data_dir)
     if args.host not in LOOPBACK and not access.enabled and not env_flag("ALLOW_UNAUTHENTICATED"):

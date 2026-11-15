@@ -13,7 +13,7 @@ import subprocess
 import threading
 import time
 
-from ai import WorkflowError, codex_binary, codex_environment, codex_status
+from .ai import WorkflowError, codex_binary, codex_environment, codex_status
 
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 LINK = re.compile(r"https://[^\s]+")

@@ -18,13 +18,29 @@ binary bundled with the VS Code extension if it is not on your PATH.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python app.py
+.venv/bin/python -m pyxida
 ```
 
 Open **http://127.0.0.1:8765**. Locally Pyxida listens only on this computer and
 needs no password. If Codex is not signed in, use **Settings → Sign in with
 ChatGPT** (or `codex login` in a terminal). For another port, use
 `--port 8766`. Scanned PDFs need text extraction before upload.
+
+The code lives in the `pyxida/` package (server, Codex workflow, documents,
+tracker and the browser files in `pyxida/static/`); tests, scripts and the
+Docker files sit at the project root.
+
+### Countries and job portals
+
+Pyxida is built Switzerland-first but searches 18 countries. In **Settings →
+Search region**, choose the country for the open profile. It sets the portals
+searched, the languages used to search job ads, the work-authorization options
+and currency on the Jobs page, the default draft languages, and the CV and
+cover-letter conventions. In **Settings → Job portals**, switch portals on or
+off, star preferred ones (searched first and most thoroughly), add a search
+hint such as "use the Compliance category", add your own boards, or restore the
+country's presets. Portals are kept per country, so switching back restores your
+list. Country presets live in `pyxida/regions.py`; add a country there.
 
 ## Run with Docker or Portainer
 
@@ -160,7 +176,7 @@ preserved for review, and long documents flow onto extra pages rather than being
 cut off. Fonts are bundled locally and embedded in PDF and Word exports.
 PDF exports provide a fixed layout; Word pagination can vary between viewers.
 The bundled Adobe fonts use the SIL Open Font License; licenses and source checksums
-are in `assets/fonts/` ([Source Sans](https://github.com/adobe-fonts/source-sans),
+are in `pyxida/assets/fonts/` ([Source Sans](https://github.com/adobe-fonts/source-sans),
 [Source Serif](https://github.com/adobe-fonts/source-serif)).
 
 In **Applications → Document design**, optionally upload a JPEG, PNG or WebP
@@ -217,8 +233,8 @@ disabled for Codex runs, so status updates are recorded by hand.
 ## Checks
 
 ```bash
-python3 -m unittest discover -s tests -v
-node --check static/app.js
+.venv/bin/python -m unittest discover -s tests -v
+node --check pyxida/static/app.js
 node --test tests/test_photo_crop.cjs
 ```
 
@@ -228,7 +244,7 @@ contract using fake Codex responses, as well as font embedding, PDF pagination,
 photo normalization, crop geometry and photo export controls. To check your actual signed-in CLI:
 
 ```bash
-python3 scripts/smoke_codex.py
+.venv/bin/python scripts/smoke_codex.py
 ```
 
 That check runs two small Codex tasks (including live search), uses your plan,

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { photoCropRect } = require('../static/photo-crop.js');
+const { photoCropRect } = require('../pyxida/static/photo-crop.js');
 
 test('portrait cropping keeps 4:5 aspect ratio and stays inside the original image', () => {
   for (const [width, height] of [[640, 800], [2400, 1200], [800, 2400]]) {

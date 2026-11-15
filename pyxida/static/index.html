@@ -26,7 +26,7 @@
       <select id="profile-picker"><option value="">Start a new profile</option></select>
       <button id="delete-profile" class="text-button danger" hidden>Delete this profile</button>
     </div>
-    <div class="sidebar-bottom"><span class="swiss-cross">+</span> Switzerland<br><small>Powered by your Codex sign-in</small></div>
+    <div class="sidebar-bottom"><span class="swiss-cross" id="region-mark">+</span> <span id="region-name">Switzerland</span><br><small>Powered by your Codex sign-in</small></div>
   </aside>
   <main>
     <header class="topbar"><span id="view-title">Profile</span><a class="connection" id="connection" href="#/settings">Checking Codex…</a></header>
@@ -98,7 +98,7 @@
       <div class="view" data-view="jobs" hidden>
         <div id="jobs-empty" class="empty panel"><span>↗</span><p>Start with your CV in <a href="#/profile">Profile</a>. Pyxida then searches Swiss vacancies for you.</p></div>
         <section id="shortlist" class="panel">
-          <div class="section-heading"><span class="step-number">02</span><div><h2>Find jobs</h2><p>Current Swiss listings, scored against your experience, languages and preferences.</p></div></div>
+          <div class="section-heading"><span class="step-number">02</span><div><h2>Find jobs</h2><p id="jobs-subtitle">Current listings in Switzerland, scored against your experience, languages and preferences.</p></div></div>
           <details id="evaluate-box" class="card"><summary><strong>Evaluate a specific posting</strong> <span class="small">URL or pasted text</span></summary>
             <form id="evaluate-form">
               <label>Listing URL <input id="evaluate-url" type="url" placeholder="https://careers.example.ch/jobs/123"></label>
@@ -117,7 +117,7 @@
                 <label>Search depth <select id="depth"><option value="standard">Standard · one pass, about 12 listings</option><option value="deep">Deep · portal by portal, up to 25 listings</option></select></label>
               </div>
               <label>Anything else that matters? <textarea id="constraints" rows="2" placeholder="Workload, languages, availability, hard constraints or roles to avoid…"></textarea></label>
-              <div class="form-footer"><p class="small">All preferences are optional. Listings you dismissed or applied to are skipped. Deep search runs one Codex search per few portals plus employer career pages, so it uses more of your plan. Choose which portals to search in <a href="#/settings">Settings</a>.</p><button id="search-button" class="primary" type="submit" disabled>Find suitable jobs <span>↗</span></button></div>
+              <div class="form-footer"><p class="small">All preferences are optional. Listings you dismissed or applied to are skipped. Deep search runs one Codex search per few portals plus employer career pages, so it uses more of your plan. Choose the country and which portals to search in <a href="#/settings">Settings</a>.</p><button id="search-button" class="primary" type="submit" disabled>Find suitable jobs <span>↗</span></button></div>
             </form>
           </details>
           <div id="stale" class="notice" hidden>Your profile has changed. Search again or re-evaluate selected postings before preparing applications.</div>
@@ -173,11 +173,22 @@
           <div id="codex-login"></div>
         </section>
 
-        <section class="panel" id="portals" hidden>
-          <div class="section-heading"><span class="step-number">⌕</span><div><h2>Job portals</h2><p>Where Pyxida searches, alongside employer career pages.</p></div></div>
-          <p class="small">Codex searches these portals with live web search, then opens each listing on the employer's or portal's own page. Turn portals off, or add one for your field.</p>
-          <ul id="portal-list" class="portal-list"></ul>
-          <form id="portal-form" class="row"><label>Portal name <input id="portal-name" maxlength="60" placeholder="e.g. Finews Jobs"></label><label>Website <input id="portal-domain" maxlength="200" placeholder="jobs.example.ch"></label><button class="secondary small-button" type="submit">Add portal</button></form>
+        <section class="panel" id="region-settings">
+          <div class="section-heading"><span class="step-number">◎</span><div><h2>Search region</h2><p>The country Pyxida searches for this profile.</p></div></div>
+          <p id="region-note" class="notice quiet" hidden>Open a saved profile or create one in <a href="#/profile">Profile</a> to choose a country and configure portals. Both are saved per profile.</p>
+          <div class="row"><label>Country <select id="region-select"></select></label></div>
+          <p class="small">The country sets which portals are searched, the languages used to search job ads, the work-authorization options and currency on the Jobs page, and the CV and cover-letter conventions. Portals are kept per country, so switching back restores your list.</p>
+        </section>
+
+        <section class="panel" id="portals">
+          <div class="section-heading"><span class="step-number">⌕</span><div><h2>Job portals</h2><p id="portals-subtitle">Where Pyxida searches, alongside employer career pages.</p></div></div>
+          <p id="portals-note" class="notice quiet" hidden>Open a profile to configure its portals.</p>
+          <div id="portals-body">
+            <p class="small">Codex searches the switched-on portals with live web search, then opens each listing on the employer's or portal's own page. Starred portals are searched first and most thoroughly. A search hint tells Codex how to use a portal, for example "use the Compliance category" or "ads are mostly in German".</p>
+            <ul id="portal-list" class="portal-list"></ul>
+            <form id="portal-form" class="portal-add"><label>Portal name <input id="portal-name" maxlength="60" placeholder="e.g. Finews Jobs"></label><label>Website <input id="portal-domain" maxlength="200" placeholder="jobs.example.ch"></label><label>Search hint <input id="portal-hint" maxlength="300" placeholder="Optional"></label><button class="secondary small-button" type="submit">Add portal</button></form>
+            <button id="portal-reset" class="text-button" type="button">Restore the preset portals for this country</button>
+          </div>
         </section>
 
         <section class="panel" id="document-appearance" hidden>

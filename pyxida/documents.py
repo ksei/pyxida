@@ -6,9 +6,9 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from ai import WorkflowError
-from formatting import cv_identity, word_document, pdf_document
-from photos import DEFAULT_DOCUMENT_SETTINGS, photo_bytes
+from .ai import WorkflowError
+from .formatting import cv_identity, word_document, pdf_document
+from .photos import DEFAULT_DOCUMENT_SETTINGS, photo_bytes
 
 MAX_UPLOAD = 8 * 1024 * 1024
 MAX_TEXT = 60000

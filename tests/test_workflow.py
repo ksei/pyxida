@@ -9,11 +9,11 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from ai import (Agent, WorkflowError, candidate_sources, canonical_url, check_quotes,
+from pyxida.ai import (Agent, WorkflowError, candidate_sources, canonical_url, check_quotes,
                 material_schema, obj, resolve_material_evidence)
-from app import Application
-from documents import application_bundle, extract_cv, word_document
-from storage import Store
+from pyxida.app import Application
+from pyxida.documents import application_bundle, extract_cv, word_document
+from pyxida.storage import Store
 
 CV = "Alex Example\nWorked for Example Bank from 2021 to 2025. Reviewed KYC files and investigated transaction monitoring alerts. English fluent. German B2."
 QUOTE = "Reviewed KYC files and investigated transaction monitoring alerts."
@@ -26,7 +26,7 @@ JOB = {"title": "KYC analyst", "company": "Sample Bank", "location": "Zurich, Sw
        "url": "https://example.com/jobs/kyc?id=42", "fit": "Strong", "why": "Relevant KYC review experience",
        "evidence": [QUOTE], "gaps": ["Work authorization not established"],
        "requirements": ["KYC review experience"], "salary": "Not stated", "work_style": "Hybrid",
-       "language": "English", "deadline": "Not stated", "listing_status": "Open", "in_switzerland": True,
+       "language": "English", "deadline": "Not stated", "listing_status": "Open", "in_country": True,
        "keywords": ["KYC", "transaction monitoring"], "deadline_date": "",
        "scores": {"skills": 80, "experience": 80, "culture": 60, "career": 80},
        "location_check": "PASS", "language_gate": "PASS", "language_note": "English required; English fluent.",
@@ -49,7 +49,7 @@ class FakeAgent:
     def materials(self, cv, discussion, profile, job, language, review_context=None, checker=None, **_):
         return copy.deepcopy(DRAFTS)
 
-    def company_research(self, company, location=""):
+    def company_research(self, company, location="", **_):
         return {"text": f"{company} research", "sources": [{"url": "https://example.com/about", "title": "About"}]}
 
 
@@ -137,7 +137,7 @@ class GroundingTests(unittest.TestCase):
         valid = {k: v for k, v in JOB.items() if k not in ("id", "checked_at")}
         jobs = [valid, copy.deepcopy(valid)]
         for field, value in (("url", "https://invented.example/job"), ("listing_status", "Closed"),
-                             ("in_switzerland", False), ("evidence", ["Unheld credential"])):
+                             ("in_country", False), ("evidence", ["Unheld credential"])):
             job = copy.deepcopy(valid); job[field] = value; jobs.append(job)
         research = {"text": "Listing research", "sources": DRAFTS["sources"]}
         with patch.object(Agent, "call", side_effect=[research, {"summary": "Matches", "jobs": jobs}]):
@@ -239,8 +239,8 @@ class CodexContractTests(unittest.TestCase):
         class RecoveredProcess(FakeProcess):
             events = [{"type": "error", "message": "Stream disconnected; reconnecting"},
                       {"type": "turn.completed"}]
-        with patch("ai.codex_status", return_value={"configured": True}), patch("ai.codex_binary", return_value="codex"), \
-             patch("ai.subprocess.Popen", side_effect=RecoveredProcess):
+        with patch("pyxida.ai.codex_status", return_value={"configured": True}), patch("pyxida.ai.codex_binary", return_value="codex"), \
+             patch("pyxida.ai.subprocess.Popen", side_effect=RecoveredProcess):
             self.assertEqual(Agent().call("Return ready", {}, obj(ready={"type": "boolean"})), {"ready": True})
 
     def test_transient_failure_is_retried_once(self):
@@ -250,8 +250,8 @@ class CodexContractTests(unittest.TestCase):
         processes = [InterruptedProcess, FakeProcess]
         def spawn(command, **kwargs):
             return processes.pop(0)(command, **kwargs)
-        with patch("ai.codex_status", return_value={"configured": True}), patch("ai.codex_binary", return_value="codex"), \
-             patch("ai.subprocess.Popen", side_effect=spawn) as start, patch("ai.time.sleep"):
+        with patch("pyxida.ai.codex_status", return_value={"configured": True}), patch("pyxida.ai.codex_binary", return_value="codex"), \
+             patch("pyxida.ai.subprocess.Popen", side_effect=spawn) as start, patch("pyxida.ai.time.sleep"):
             self.assertEqual(Agent().call("Return ready", {}, obj(ready={"type": "boolean"})), {"ready": True})
         self.assertEqual(start.call_count, 2)
 
@@ -259,8 +259,8 @@ class CodexContractTests(unittest.TestCase):
         class InterruptedProcess(FakeProcess):
             returncode = 1
             events = [{"type": "turn.failed", "error": {"message": "Stream disconnected"}}]
-        with patch("ai.codex_status", return_value={"configured": True}), patch("ai.codex_binary", return_value="codex"), \
-             patch("ai.subprocess.Popen", side_effect=InterruptedProcess) as start, patch("ai.time.sleep"):
+        with patch("pyxida.ai.codex_status", return_value={"configured": True}), patch("pyxida.ai.codex_binary", return_value="codex"), \
+             patch("pyxida.ai.subprocess.Popen", side_effect=InterruptedProcess) as start, patch("pyxida.ai.time.sleep"):
             with self.assertRaises(WorkflowError) as caught:
                 Agent().call("Return ready", {}, obj(ready={"type": "boolean"}))
         self.assertEqual(start.call_count, 2)
@@ -270,8 +270,8 @@ class CodexContractTests(unittest.TestCase):
         class ExhaustedProcess(FakeProcess):
             returncode = 1
             events = [{"type": "turn.failed", "error": {"message": "usage_limit_reached"}}]
-        with patch("ai.codex_status", return_value={"configured": True}), patch("ai.codex_binary", return_value="codex"), \
-             patch("ai.subprocess.Popen", side_effect=ExhaustedProcess) as start:
+        with patch("pyxida.ai.codex_status", return_value={"configured": True}), patch("pyxida.ai.codex_binary", return_value="codex"), \
+             patch("pyxida.ai.subprocess.Popen", side_effect=ExhaustedProcess) as start:
             with self.assertRaises(WorkflowError) as caught:
                 Agent().call("Return ready", {}, obj(ready={"type": "boolean"}))
         self.assertEqual(start.call_count, 1)
@@ -281,8 +281,8 @@ class CodexContractTests(unittest.TestCase):
         processes = []
         def spawn(command, **kwargs):
             process = FakeProcess(command, **kwargs); processes.append(process); return process
-        with patch("ai.codex_status", return_value={"configured": True}), patch("ai.codex_binary", return_value="codex"), \
-             patch("ai.subprocess.Popen", side_effect=spawn), patch.dict(os.environ, {"OPENAI_API_KEY": "unused", "CODEX_API_KEY": "unused"}):
+        with patch("pyxida.ai.codex_status", return_value={"configured": True}), patch("pyxida.ai.codex_binary", return_value="codex"), \
+             patch("pyxida.ai.subprocess.Popen", side_effect=spawn), patch.dict(os.environ, {"OPENAI_API_KEY": "unused", "CODEX_API_KEY": "unused"}):
             result = Agent().call("Return ready", {"private": "candidate details"}, obj(ready={"type": "boolean"}))
         self.assertEqual(result, {"ready": True})
         process = processes[0]
@@ -295,8 +295,8 @@ class CodexContractTests(unittest.TestCase):
         self.assertIn('web_search="disabled"', process.command)
 
     def test_research_rejects_a_run_without_native_search_events(self):
-        with patch("ai.codex_status", return_value={"configured": True}), patch("ai.codex_binary", return_value="codex"), \
-             patch("ai.subprocess.Popen", side_effect=FakeProcess):
+        with patch("pyxida.ai.codex_status", return_value={"configured": True}), patch("pyxida.ai.codex_binary", return_value="codex"), \
+             patch("pyxida.ai.subprocess.Popen", side_effect=FakeProcess):
             with self.assertRaisesRegex(WorkflowError, "did not perform a web search"):
                 Agent().call("Search", {}, search=True)
 
@@ -304,16 +304,16 @@ class CodexContractTests(unittest.TestCase):
         class SearchProcess(FakeProcess):
             result = {"text": "Research", "sources": DRAFTS["sources"]}
             events = [{"type": "item.completed", "item": {"type": "web_search", "query": "Swiss jobs"}}]
-        with patch("ai.codex_status", return_value={"configured": True}), patch("ai.codex_binary", return_value="codex"), \
-             patch("ai.subprocess.Popen", side_effect=SearchProcess):
+        with patch("pyxida.ai.codex_status", return_value={"configured": True}), patch("pyxida.ai.codex_binary", return_value="codex"), \
+             patch("pyxida.ai.subprocess.Popen", side_effect=SearchProcess):
             research = Agent().call("Search", {}, search=True)
         self.assertEqual(research["sources"][0]["url"], JOB["url"])
 
     def test_malformed_structured_output_is_not_saved(self):
         class MalformedProcess(FakeProcess):
             result = {"wrong": True}
-        with patch("ai.codex_status", return_value={"configured": True}), patch("ai.codex_binary", return_value="codex"), \
-             patch("ai.subprocess.Popen", side_effect=MalformedProcess):
+        with patch("pyxida.ai.codex_status", return_value={"configured": True}), patch("pyxida.ai.codex_binary", return_value="codex"), \
+             patch("pyxida.ai.subprocess.Popen", side_effect=MalformedProcess):
             with self.assertRaises(WorkflowError):
                 Agent().call("Return ready", {}, obj(ready={"type": "boolean"}))
 

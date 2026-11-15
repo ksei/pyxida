@@ -9,8 +9,8 @@ from urllib.request import Request, urlopen
 
 import pymupdf
 
-from app import Application, make_server
-from storage import Store
+from pyxida.app import Application, make_server
+from pyxida.storage import Store
 from test_photos import sample_photo
 
 

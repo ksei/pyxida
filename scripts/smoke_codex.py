@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai import Agent, WorkflowError, codex_status, obj
-from app import load_env
+from pyxida.ai import Agent, WorkflowError, codex_status, obj
+from pyxida.app import load_env
 
 
 def main():

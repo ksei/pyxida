@@ -6,20 +6,11 @@ from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ai import WorkflowError
+from .ai import WorkflowError
+from .regions import DEFAULT_REGION, preset_portals
 
 
 RESEARCH_TTL_DAYS = 30
-# Discovery portals for Swiss vacancies. Codex searches them; listings are still read on their own pages.
-DEFAULT_PORTALS = [
-    {"name": "jobs.ch", "domain": "jobs.ch"},
-    {"name": "jobup.ch (Romandie)", "domain": "jobup.ch"},
-    {"name": "Job-Room (SECO / RAV)", "domain": "job-room.ch"},
-    {"name": "LinkedIn Jobs", "domain": "linkedin.com"},
-    {"name": "Indeed Switzerland", "domain": "ch.indeed.com"},
-    {"name": "eFinancialCareers", "domain": "efinancialcareers.ch"},
-    {"name": "JobScout24", "domain": "jobscout24.ch"},
-]
 
 
 def apply_defaults(state):
@@ -35,7 +26,13 @@ def apply_defaults(state):
     state.setdefault("style", None)
     state.setdefault("calibration", None)
     state.setdefault("reconcile", None)
-    state.setdefault("portals", [{**p, "enabled": True, "builtin": True} for p in DEFAULT_PORTALS])
+    state.setdefault("region", DEFAULT_REGION)
+    state.setdefault("portals", preset_portals(state["region"]))
+    for portal in state["portals"]:
+        # Portals saved before regions existed were all Swiss presets or custom Swiss boards.
+        portal.setdefault("country", DEFAULT_REGION)
+        portal.setdefault("hint", "")
+        portal.setdefault("preferred", False)
     if state.get("shortlist"):
         state["shortlist"].setdefault("vetoed", [])
     return state

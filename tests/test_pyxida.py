@@ -15,13 +15,13 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
-import tracker
-from access import Access
-from ai import Agent, WorkflowError, candidate_sources, evidence_text, merge_reposts, score_job
-from app import Application, Tasks, make_server
-from codex_auth import DeviceLogin
-from documents import extract_supporting
-from storage import Store
+from pyxida import tracker
+from pyxida.access import Access
+from pyxida.ai import Agent, WorkflowError, candidate_sources, evidence_text, merge_reposts, score_job
+from pyxida.app import Application, Tasks, make_server
+from pyxida.codex_auth import DeviceLogin
+from pyxida.documents import extract_supporting
+from pyxida.storage import Store
 from test_features import FeatureAgent
 from test_workflow import CV, DRAFTS, JOB, PROFILE, QUOTE
 
@@ -237,6 +237,21 @@ class AgentPyxidaTests(unittest.TestCase):
         self.assertIn("P3", result["summary"])
         self.assertEqual(len(result["jobs"]), 1)
 
+    def test_search_prompts_use_the_selected_country_and_preferred_portals_first(self):
+        base = {k: v for k, v in JOB.items() if k not in ("id", "checked_at", "overall", "vetoes", "fit")}
+        research = {"text": "Found", "sources": [{"url": JOB["url"], "title": "KYC"}]}
+        portals = [{"name": "A", "domain": "a.de", "hint": "", "preferred": False},
+                   {"name": "B", "domain": "b.de", "hint": "Finance", "preferred": True}]
+        prefs = {"country": "Germany", "search_languages": ["German", "English"]}
+        with patch.object(Agent, "call", side_effect=[research, {"summary": "Ranked.", "jobs": [copy.deepcopy(base)]}]) as call:
+            Agent().search(PROFILE, prefs, CV, portals=portals)
+        prompt, data = call.call_args_list[0].args[:2]
+        self.assertIn("vacancies in\nGermany", prompt)
+        self.assertIn("(German, English)", prompt)
+        self.assertNotIn("Switzerland", prompt)
+        self.assertEqual([p["domain"] for p in data["portals"]], ["b.de", "a.de"])
+        self.assertIn("Include only vacancies\nin Germany", call.call_args_list[1].args[0])
+
     def test_reposted_roles_merge_into_the_best_scored_listing(self):
         first = score_job({**copy.deepcopy(JOB), "url": "https://a.ch/1", "also_listed": []})
         repost = score_job({**copy.deepcopy(JOB), "url": "https://b.ch/2", "company": "sample bank ", "also_listed": [],
@@ -275,7 +290,7 @@ class DeviceLoginTests(unittest.TestCase):
     def test_link_and_code_are_parsed_from_cli_output(self):
         process = FakeLoginProcess(self.LINES)
         login = DeviceLogin(popen=lambda *a, **k: process, status=lambda: {"configured": True})
-        with patch("codex_auth.codex_binary", return_value="codex"):
+        with patch("pyxida.codex_auth.codex_binary", return_value="codex"):
             state = login.start(wait=2)
         self.assertIn(state["status"], ("waiting", "success"))
         for _ in range(50):
@@ -293,7 +308,7 @@ class DeviceLoginTests(unittest.TestCase):
 
         process = FakeLoginProcess(lines(), code=1)
         login = DeviceLogin(popen=lambda *a, **k: process, status=lambda: {"configured": False})
-        with patch("codex_auth.codex_binary", return_value="codex"):
+        with patch("pyxida.codex_auth.codex_binary", return_value="codex"):
             state = login.start(wait=2)
         self.assertEqual((state["status"], state["url"], state["code"]),
                          ("waiting", "https://auth.openai.com/codex/device", "ABCD-EFGH2"))
@@ -388,7 +403,7 @@ class ServerTests(unittest.TestCase):
 
     def test_codex_device_login_endpoints(self):
         self.start()
-        with patch("codex_auth.codex_binary", return_value="codex"):
+        with patch("pyxida.codex_auth.codex_binary", return_value="codex"):
             status, body, _ = self.request("/api/codex/login", {})
         self.assertEqual(status, 200)
         self.assertIn(json.loads(body)["status"], ("waiting", "success"))
@@ -399,8 +414,8 @@ class StartupTests(unittest.TestCase):
     def test_network_binding_requires_a_password(self):
         with tempfile.TemporaryDirectory() as data:
             env = {**os.environ, "DATA_DIR": data, "APP_PASSWORD": "", "ALLOW_UNAUTHENTICATED": ""}
-            result = subprocess.run([sys.executable, str(ROOT / "app.py"), "--host", "0.0.0.0", "--port", "0"],
-                                    capture_output=True, text=True, timeout=20, env=env, cwd=data)
+            result = subprocess.run([sys.executable, "-m", "pyxida", "--host", "0.0.0.0", "--port", "0"],
+                                    capture_output=True, text=True, timeout=20, env=env, cwd=ROOT)
         self.assertEqual(result.returncode, 2)
         self.assertIn("APP_PASSWORD", result.stderr)
 

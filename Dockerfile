@@ -37,4 +37,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python3 -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/healthz' % os.environ.get('PORT', '8765'), timeout=4)"
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["python3", "app.py"]
+CMD ["python3", "-m", "pyxida"]

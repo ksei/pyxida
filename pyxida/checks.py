@@ -8,8 +8,8 @@ reported as gaps; they are never inserted automatically.
 """
 import re
 
-from ai import CV_PAGE_LIMIT, LETTER_PAGE_LIMIT, WorkflowError, normalized
-from formatting import cv_identity, pdf_document
+from .ai import CV_PAGE_LIMIT, LETTER_PAGE_LIMIT, WorkflowError, normalized
+from .formatting import cv_identity, pdf_document
 
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 PHONE = re.compile(r"\+?\d[\d ()./-]{7,}\d")

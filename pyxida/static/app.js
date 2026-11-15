@@ -5,7 +5,9 @@ let selectedFile = null;
 let portraitImage = null;
 let appearanceProfile = null;
 let appearanceDirty = false;
-const LANGUAGES = ['English', 'German', 'French', 'Italian'];
+const LANGUAGES = ['English', 'German', 'French', 'Italian', 'Spanish', 'Portuguese', 'Dutch', 'Danish', 'Swedish', 'Norwegian', 'Finnish', 'Polish'];
+let regions = {};
+let editingPortal = null;
 const FINAL = ['hired', 'rejected', 'no_response', 'offer_declined', 'withdrawn'];
 const REACHED_INTERVIEW = ['interview', 'offer', 'hired', 'offer_declined'];
 
@@ -173,7 +175,7 @@ function controls() {
   $('#photo-file').disabled = busy || !state;
   for (const id of ['#photo-zoom', '#photo-x', '#photo-y']) $(id).disabled = busy || !portraitImage;
   for (const id of ['#photo-on-cv', '#photo-on-letter']) $(id).disabled = busy || !(portraitImage || state?.photo);
-  for (const id of ['#evaluate-url', '#evaluate-text', '#expand-urls', '#document-file', '#document-type']) $(id).disabled = busy || !state;
+  for (const id of ['#evaluate-url', '#evaluate-text', '#expand-urls', '#document-file', '#document-type', '#region-select']) $(id).disabled = busy || !state;
 }
 
 function pendingApplications() {
@@ -366,18 +368,78 @@ function renderJobs() {
     button('Restore', () => act('Restoring this listing…', '/api/dismiss', { job_id: id, restore: true }), 'text-button'))));
 }
 
+function region() {
+  return regions[state?.region || 'CH'] || { name: 'Switzerland', languages: ['German', 'French', 'Italian', 'English'], currency: 'CHF', permits: [] };
+}
+
+function languageOptions() {
+  return [...new Set([...region().languages, 'English', ...LANGUAGES])];
+}
+
+function setOptions(selectEl, options, keep = true) {
+  const value = selectEl.value;
+  selectEl.replaceChildren(...options.map(([v, text]) => { const o = node('option', text); o.value = v; return o; }));
+  if (keep && [...selectEl.options].some(o => o.value === value)) selectEl.value = value;
+}
+
+function renderRegion() {
+  const r = region();
+  const codes = Object.keys(regions).sort((a, b) => regions[a].name.localeCompare(regions[b].name));
+  setOptions($('#region-select'), codes.map(c => [c, regions[c].name]), false);
+  $('#region-select').value = state?.region || 'CH';
+  $('#region-select').disabled = busy || !state;
+  $('#region-note').hidden = !!state;
+  $('#region-name').textContent = r.name;
+  const swiss = (state?.region || 'CH') === 'CH';
+  $('#region-mark').textContent = swiss ? '+' : (state?.region || '');
+  $('#region-mark').classList.toggle('region-code', !swiss);
+  $('#jobs-subtitle').textContent = `Current listings in ${r.name}, scored against your experience, languages and preferences.`;
+  $('#cities').placeholder = `Anywhere in ${r.name}`;
+  $('#salary').placeholder = `Optional · e.g. ${r.currency} 100,000+`;
+  const permit = state?.preferences?.permit || '';
+  setOptions($('#permit'), [['', 'Not stated'], ...r.permits.map(p => [p, p]), ...(permit && !r.permits.includes(permit) ? [[permit, permit]] : [])]);
+  $('#permit').value = permit;
+  setOptions($('#draft-language'), languageOptions().map(l => [l, l]));
+  $('#portals-subtitle').textContent = `Where Pyxida searches in ${r.name}, alongside employer career pages.`;
+  $('#portal-reset').textContent = `Restore the preset portals for ${r.name}`;
+}
+
+function portalEditor(p) {
+  const name = input('text', p.name, 'Portal name', 'Portal name'); name.disabled = busy || p.builtin;
+  const domain = input('text', p.domain, 'Website', 'Website'); domain.disabled = busy || p.builtin;
+  const hint = input('text', p.hint, 'Search hint, e.g. use the Compliance category', 'Search hint'); hint.maxLength = 300;
+  const preferred = document.createElement('input'); preferred.type = 'checkbox'; preferred.checked = p.preferred; preferred.disabled = busy;
+  const save = () => act('Saving portal…', '/api/portals', { action: 'edit', domain: p.domain, name: name.value, new_domain: p.builtin ? '' : domain.value,
+    hint: hint.value, preferred: preferred.checked }, () => { editingPortal = null; renderPortals(); });
+  return el('div', 'portal-editor', labeled('Name', name), labeled('Website', domain), labeled('Search hint', hint),
+    el('label', 'check', preferred, document.createTextNode(' Preferred: search first')),
+    el('div', 'row', button('Save', save), button('Cancel', () => { editingPortal = null; renderPortals(); }, 'text-button')),
+    p.builtin ? node('p', 'Preset portals keep their name and website; you can switch them off, star them or add a hint.', 'small') : null);
+}
+
 function renderPortals() {
-  const portals = state?.portals || [];
-  const coverage = Object.fromEntries((state?.shortlist?.portal_coverage || []).map(c => [c.domain, c]));
+  $('#portals-note').hidden = !!state;
+  $('#portals-body').hidden = !state;
+  if (!state) return;
+  const portals = state.portals || [];
+  const coverage = Object.fromEntries((state.shortlist?.portal_coverage || []).map(c => [c.domain, c]));
   $('#portal-list').replaceChildren(...portals.map(p => {
     const box = document.createElement('input');
     box.type = 'checkbox'; box.checked = p.enabled; box.disabled = busy;
+    box.setAttribute('aria-label', `Search ${p.name}`);
     box.addEventListener('change', () => act('Updating portals…', '/api/portals', { action: 'toggle', domain: p.domain, enabled: box.checked }));
+    const star = button(p.preferred ? '★' : '☆', () => act('Updating portals…', '/api/portals', { action: 'edit', domain: p.domain, preferred: !p.preferred }), 'star-button' + (p.preferred ? ' on' : ''));
+    star.title = p.preferred ? 'Preferred: searched first. Click to unstar.' : 'Mark as preferred';
+    star.setAttribute('aria-label', star.title);
     const c = coverage[p.domain];
     const health = !c ? '' : c.sources ? `${c.sources} source${c.sources === 1 ? '' : 's'}, ${c.jobs} on shortlist` : 'no results last search';
-    const row = el('li', c && !c.sources && p.enabled ? 'portal quiet-portal' : 'portal',
-      el('label', '', box, node('span', p.name)), node('span', p.domain, 'small'), health && node('span', health, 'small health'));
-    if (!p.builtin) row.append(button('Remove', () => act('Removing portal…', '/api/portals', { action: 'remove', domain: p.domain }), 'text-button danger'));
+    const row = el('li', 'portal' + (c && !c.sources && p.enabled ? ' quiet-portal' : '') + (p.enabled ? '' : ' off'),
+      el('div', 'portal-main', box, star, el('span', 'portal-name', node('strong', p.name), node('span', ` ${p.domain}`, 'small'),
+        p.hint ? node('span', ` · ${p.hint}`, 'small portal-hint') : null, !p.builtin ? chip('Added by you') : null),
+        health ? node('span', health, 'small health') : null,
+        el('span', 'portal-actions', button('Edit', () => { editingPortal = p.domain; renderPortals(); }, 'text-button'),
+          !p.builtin ? button('Remove', () => { if (confirm(`Remove ${p.name}?`)) act('Removing portal…', '/api/portals', { action: 'remove', domain: p.domain }); }, 'text-button danger') : null)));
+    if (editingPortal === p.domain) row.append(portalEditor(p));
     return row;
   }));
 }
@@ -580,7 +642,7 @@ function prepBlock(id, application) {
   detail.append(node('summary', interview ? `Interview prep · ${interview.stage}` : 'Interview prep & mock interview'));
   const stage = select(state.pipeline.stages, interview?.stage || 'First interview', 'Interview stage');
   const people = input('text', interview?.interviewers, 'Interviewer names and roles (optional)', 'Interviewers');
-  const language = select(LANGUAGES, interview?.language || application.submitted?.language || 'English', 'Prep language');
+  const language = select(languageOptions(), interview?.language || application.submitted?.language || 'English', 'Prep language');
   detail.append(el('div', 'row', stage, people, language, button(interview ? 'Rebuild prep pack ↗' : 'Build prep pack ↗', () =>
     act('Codex is researching the company and building your prep pack…', '/api/interview-prep',
       { job_id: id, stage: stage.value, interviewers: people.value, language: language.value }))));
@@ -987,20 +1049,20 @@ function render() {
       $('#sources').replaceChildren();
       (state.shortlist.sources || []).forEach(s => { const li = node('li'); li.append(link(s.url, s.title)); $('#sources').append(li); });
     }
-    renderDocuments(); renderCareer(); renderStyle(); renderCalibration(); renderPortals();
+    renderDocuments(); renderCareer(); renderStyle(); renderCalibration();
   } else {
     $('#cities').value = ''; $('#work-style').value = ''; $('#salary').value = ''; $('#constraints').value = ''; $('#permit').value = '';
     $('#depth').value = 'standard';
     $('#focus').value = 'AML, KYC, financial crime, finance and banking; include relevant adjacent roles';
     careerRendered = null;
   }
-  $('#portals').hidden = !state;
-  renderCoverage(); renderNav();
+  renderRegion(); renderPortals(); renderCoverage(); renderNav();
   renderJobs(); renderDrafts(); renderAppearance(); renderExpand(); renderPipeline(); renderGrowth(); controls();
 }
 
 async function refreshProfiles() {
   const status = await api('/api/status');
+  regions = status.regions || regions;
   $('#connection').textContent = status.configured ? 'Codex connected' : 'Connect Codex';
   $('#connection').classList.toggle('ready', status.configured);
   $('#setup').hidden = status.configured;
@@ -1065,15 +1127,15 @@ $('#evaluate-form').addEventListener('submit', e => {
 $('#portal-form').addEventListener('submit', e => {
   e.preventDefault();
   if (!state) return;
-  act('Adding portal…', '/api/portals', { action: 'add', name: $('#portal-name').value, domain: $('#portal-domain').value }, () => {
-    $('#portal-name').value = ''; $('#portal-domain').value = '';
+  act('Adding portal…', '/api/portals', { action: 'add', name: $('#portal-name').value, domain: $('#portal-domain').value, hint: $('#portal-hint').value }, () => {
+    $('#portal-name').value = ''; $('#portal-domain').value = ''; $('#portal-hint').value = '';
   });
 });
 
 $('#search-form').addEventListener('submit', e => {
   e.preventDefault();
   if (!state) return;
-  act('Codex is searching Swiss vacancies and comparing their requirements. This can take a few minutes…', '/api/search',
+  act(`Codex is searching vacancies in ${region().name} and comparing their requirements. This can take a few minutes…`, '/api/search',
     { preferences: preferences() }, () => $('#results-heading').scrollIntoView({ behavior: 'smooth' }));
 });
 
@@ -1176,6 +1238,17 @@ $('#sign-out').addEventListener('click', () => run('Signing out…', async () =>
   await api('/api/logout', {});
   location.href = '/login';
 }));
+
+$('#region-select').addEventListener('change', e => {
+  if (!state) return;
+  const name = regions[e.target.value]?.name || e.target.value;
+  act(`Switching the search region to ${name}…`, '/api/region', { region: e.target.value });
+});
+
+$('#portal-reset').addEventListener('click', () => {
+  if (!state || !confirm(`Restore the preset portals for ${region().name}? Switch-offs, stars and hints on presets are reset; portals you added are kept.`)) return;
+  act('Restoring preset portals…', '/api/portals', { action: 'reset' });
+});
 
 async function openProfile(id) {
   const next = await api(`/api/profile?id=${encodeURIComponent(id)}`);

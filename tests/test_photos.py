@@ -9,12 +9,12 @@ import pymupdf
 from PIL import Image
 from docx import Document
 
-from ai import WorkflowError
-from app import Application
-from documents import application_bundle
-from formatting import html_document, pdf_document, word_document
-from photos import DEFAULT_DOCUMENT_SETTINGS, document_settings, normalize_photo, photo_bytes
-from storage import Store
+from pyxida.ai import WorkflowError
+from pyxida.app import Application
+from pyxida.documents import application_bundle
+from pyxida.formatting import html_document, pdf_document, word_document
+from pyxida.photos import DEFAULT_DOCUMENT_SETTINGS, document_settings, normalize_photo, photo_bytes
+from pyxida.storage import Store
 
 
 def sample_photo(size=(800, 1200), mode='RGB', color='#cbd9de'):

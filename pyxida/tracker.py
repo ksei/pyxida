@@ -5,7 +5,7 @@ import io
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from ai import WorkflowError
+from .ai import WorkflowError
 
 STATUSES = ("drafted", "applied", "interview", "offer", "hired", "rejected", "no_response", "offer_declined", "withdrawn")
 LABELS = {"drafted": "Drafted", "applied": "Applied", "interview": "Interviewing", "offer": "Offer",

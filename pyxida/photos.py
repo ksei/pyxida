@@ -4,7 +4,7 @@ import io
 import warnings
 from datetime import datetime, timezone
 
-from ai import WorkflowError
+from .ai import WorkflowError
 
 DEFAULT_DOCUMENT_SETTINGS = {"photo_cv": True, "photo_letter": False}
 MAX_PHOTO_BYTES = 5 * 1024 * 1024

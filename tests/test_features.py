@@ -6,12 +6,12 @@ import unittest
 from datetime import date, timedelta
 from unittest.mock import patch
 
-import tracker
-from ai import Agent, WorkflowError, candidate_sources, score_job
-from app import Application, profile_links
-from checks import keyword_coverage, quality_checks
-from guard import inspect_posting
-from storage import Store
+from pyxida import tracker
+from pyxida.ai import Agent, WorkflowError, candidate_sources, score_job
+from pyxida.app import Application, profile_links
+from pyxida.checks import keyword_coverage, quality_checks
+from pyxida.guard import inspect_posting
+from pyxida.storage import Store
 from test_workflow import CV, DRAFTS, JOB, PROFILE, QUOTE, FakeAgent
 
 POSTING = ("KYC Analyst, Sample Bank, Geneva. You will review onboarding files, investigate transaction "
@@ -318,7 +318,8 @@ class FeatureWorkflowTests(unittest.TestCase):
     def test_portal_registry_steers_search_and_reports_coverage(self):
         state = self.post("/api/portals", action="toggle", domain="linkedin.com", enabled=False)
         state = self.post("/api/portals", action="add", name="Example board", domain="https://www.Example.com/jobs")
-        self.assertEqual(state["portals"][-1], {"name": "Example board", "domain": "example.com", "enabled": True, "builtin": False})
+        self.assertEqual(state["portals"][-1], {"name": "Example board", "domain": "example.com", "enabled": True, "builtin": False,
+                                                "country": "CH", "preferred": False, "hint": ""})
         state = self.post("/api/search")
         sent = {p["domain"] for p in self.agent.calls[-1][3]}
         self.assertIn("example.com", sent)
@@ -333,6 +334,45 @@ class FeatureWorkflowTests(unittest.TestCase):
                 self.post("/api/portals", **data)
         state = self.post("/api/portals", action="remove", domain="example.com")
         self.assertNotIn("example.com", {p["domain"] for p in state["portals"]})
+
+    def test_regions_switch_portals_languages_and_permits_without_losing_custom_portals(self):
+        self.post("/api/portals", action="add", name="Finews", domain="finews.ch", hint="Compliance category")
+        self.post("/api/search", preferences={"permit": "C permit (settled)"})
+        state = self.post("/api/region", region="DE")
+        self.assertEqual(state["region"], "DE")
+        self.assertIn("stepstone.de", {p["domain"] for p in state["portals"]})
+        self.assertNotIn("finews.ch", {p["domain"] for p in state["portals"]})
+        self.assertEqual(state["preferences"]["permit"], "")
+        self.post("/api/search")
+        _, _, _, portals, kwargs = self.agent.calls[-1]
+        self.assertIn("stepstone.de", {p["domain"] for p in portals})
+        prefs = self.store.get(self.id)["preferences"]
+        self.assertEqual((prefs["country"], prefs["search_languages"]), ("Germany", ["German", "English"]))
+        state = self.post("/api/region", region="CH")
+        swiss = {p["domain"]: p for p in state["portals"]}
+        self.assertEqual(swiss["finews.ch"]["hint"], "Compliance category")
+        self.assertEqual(len([p for p in state["portals"] if p["domain"] == "jobs.ch"]), 1)
+        with self.assertRaises(WorkflowError):
+            self.post("/api/region", region="XX")
+
+    def test_portals_can_be_edited_preferred_and_reset(self):
+        self.post("/api/portals", action="add", name="Board", domain="board.ch")
+        state = self.post("/api/portals", action="edit", domain="jobs.ch", preferred=True, hint="Use the Banking category",
+                          name="Renamed", new_domain="other.ch")
+        jobs_ch = next(p for p in state["portals"] if p["domain"] == "jobs.ch")
+        self.assertEqual((jobs_ch["name"], jobs_ch["preferred"], jobs_ch["hint"]), ("jobs.ch", True, "Use the Banking category"))
+        state = self.post("/api/portals", action="edit", domain="board.ch", name="Better board", new_domain="better.ch")
+        self.assertIn("better.ch", {p["domain"] for p in state["portals"]})
+        self.post("/api/portals", action="toggle", domain="jobup.ch", enabled=False)
+        state = self.post("/api/portals", action="reset")
+        by_domain = {p["domain"]: p for p in state["portals"]}
+        self.assertTrue(by_domain["jobup.ch"]["enabled"])
+        self.assertFalse(by_domain["jobs.ch"]["preferred"])
+        self.assertIn("better.ch", by_domain)
+        self.post("/api/portals", action="edit", domain="jobs.ch", preferred=True, hint="Banking")
+        self.post("/api/search")
+        sent = self.agent.calls[-1][3]
+        self.assertEqual(next(p for p in sent if p["domain"] == "jobs.ch")["hint"], "Banking")
 
     def test_profile_links_skip_linkedin_and_emails(self):
         self.assertEqual(profile_links("github.com/a, alex@github.com, https://linkedin.com/in/a https://alex.dev/"),

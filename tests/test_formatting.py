@@ -8,8 +8,8 @@ from html.parser import HTMLParser
 import pymupdf
 from docx import Document
 
-from formatting import cv_identity, document_blocks, html_document, pdf_document, word_document
-from document_fonts import BODY_FONT, DISPLAY_FONT, FONT_DIR, FONT_FILES
+from pyxida.formatting import cv_identity, document_blocks, html_document, pdf_document, word_document
+from pyxida.document_fonts import BODY_FONT, DISPLAY_FONT, FONT_DIR, FONT_FILES
 
 CV = """# Alex Example
 **AML & KYC specialist**
