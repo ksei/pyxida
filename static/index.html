@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pyxida · Your career compass</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/photo-crop.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a href="#/profile" class="brand"><span class="brand-mark">p.</span><span>pyxida<small>YOUR CAREER COMPASS</small></span></a>
+    <div class="workspace-label">YOUR WORKSPACE</div>
+    <nav aria-label="Sections">
+      <a href="#/profile" data-nav="profile"><span>01</span> Profile</a>
+      <a href="#/jobs" data-nav="jobs"><span>02</span> Jobs <em id="nav-jobs" class="nav-count" hidden></em></a>
+      <a href="#/applications" data-nav="applications"><span>03</span> Applications <em id="nav-applications" class="nav-count" hidden></em></a>
+      <a href="#/pipeline" data-nav="pipeline"><span>04</span> Pipeline <em id="nav-pipeline" class="nav-count due" hidden></em></a>
+      <a href="#/growth" data-nav="growth"><span>05</span> Growth</a>
+      <a href="#/settings" data-nav="settings"><span>06</span> Settings</a>
+    </nav>
+    <div class="saved-profiles">
+      <label for="profile-picker">Saved profiles</label>
+      <select id="profile-picker"><option value="">Start a new profile</option></select>
+      <button id="delete-profile" class="text-button danger" hidden>Delete this profile</button>
+    </div>
+    <div class="sidebar-bottom"><span class="swiss-cross">+</span> Switzerland<br><small>Powered by your Codex sign-in</small></div>
+  </aside>
+  <main>
+    <header class="topbar"><span id="view-title">Profile</span><a class="connection" id="connection" href="#/settings">Checking Codex…</a></header>
+    <div class="page">
+      <div id="setup" class="notice" hidden></div>
+      <div id="activity" class="activity" role="status" aria-live="polite" hidden><span class="spinner"></span><span id="activity-text"></span></div>
+      <div id="error" class="notice error" role="alert" hidden></div>
+
+      <!-- PROFILE ------------------------------------------------------------>
+      <div class="view" data-view="profile">
+        <div id="welcome">
+          <div class="hero"><div class="eyebrow">EXPERIENCE FIRST. OPPORTUNITY NEXT.</div><h1>Find your direction<br>with Pyxida.</h1><p>Share your CV. Discuss what matters. Discover Swiss opportunities that fit the experience you already have.</p><div class="hero-tags"><span>Switzerland</span><span>Finance & compliance focus</span><span>No job title needed</span></div></div>
+          <section id="intake" class="panel">
+            <div class="section-heading"><span class="step-number">01</span><div><h2>Your background</h2><p>We infer suitable roles from your CV, including relevant adjacent paths.</p></div></div>
+            <form id="intake-form">
+              <label class="upload" for="cv-file"><span class="upload-icon">↥</span><strong id="file-label">Choose your CV</strong><span>PDF, Word, TXT or Markdown · up to 8 MB</span><input id="cv-file" type="file" accept=".pdf,.docx,.txt,.md"></label>
+              <details class="paste"><summary>Or paste your CV text</summary><label for="cv-text" class="sr-only">CV text</label><textarea id="cv-text" rows="9" placeholder="Your experience, responsibilities, education, skills and languages…"></textarea></details>
+              <div class="form-footer"><p class="small">Your profile is saved by this Pyxida instance. Analysis uses the signed-in Codex account.</p><button type="submit" class="primary">Understand my profile <span>↗</span></button></div>
+            </form>
+          </section>
+        </div>
+
+        <div id="profile-content" hidden>
+          <section id="profile" class="panel">
+            <div class="section-heading"><span class="step-number">01</span><div><h2>Your profile</h2><p>Suggested directions, with the evidence behind each one.</p></div></div>
+            <p id="profile-summary" class="profile-summary"></p>
+            <div id="strengths" class="chips"></div>
+            <p id="languages" class="small"></p>
+            <div class="subheading">POSSIBLE DIRECTIONS</div><div id="roles" class="role-grid"></div>
+            <div class="discussion"><div class="subheading">LET’S REFINE THE PICTURE</div><div id="messages" aria-live="polite"></div><div id="questions"></div>
+              <form id="discussion-form"><label for="message" class="sr-only">Reply or correct your profile</label><textarea id="message" rows="3" maxlength="5000" placeholder="Answer the questions, correct a detail, or tell us what you want more of…" required></textarea><button class="secondary" type="submit">Update my profile ↗</button></form>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="section-heading"><span class="step-number">+</span><div><h2>Make your profile richer</h2><p>Each addition sharpens fit scores, drafts and interview answers.</p></div></div>
+
+            <details class="card" id="documents-card"><summary><strong>Supporting documents</strong> <span id="documents-summary" class="small"></span></summary>
+              <p class="small">Add a LinkedIn data export (the ZIP from LinkedIn → Settings → Data privacy → Get a copy of your data), reference letters, diplomas, certificates or past applications. Their text becomes evidence Pyxida can cite, and Codex checks them against your CV for conflicting titles, dates or degrees.</p>
+              <form id="document-form" class="row">
+                <label>Type <select id="document-type"><option value="linkedin">LinkedIn export</option><option value="reference">Reference letter</option><option value="diploma">Diploma or certificate</option><option value="application">Past application or cover letter</option><option value="other">Other supporting document</option></select></label>
+                <label>File <input id="document-file" type="file" accept=".pdf,.docx,.txt,.md,.zip,.csv"></label>
+                <button class="secondary small-button" type="submit">Add document ↗</button>
+              </form>
+              <ul id="document-list" class="plain-list"></ul>
+              <div id="reconcile"></div>
+            </details>
+
+            <details class="card" id="career-card"><summary><strong>Career goals & working style</strong> <span id="career-summary" class="small"></span></summary>
+              <p class="small">Used for culture and career-fit scores, motivation in cover letters, and interview preparation. Everything is optional.</p>
+              <form id="career-form" class="career-grid"></form>
+            </details>
+
+            <details class="card" id="style-card"><summary><strong>Your writing style</strong> <span id="style-summary" class="small"></span></summary>
+              <p class="small">Pyxida can learn how you write from past applications you add as supporting documents, so drafts and follow-ups sound like you. It describes your style; it does not copy content.</p>
+              <div id="style-content"></div>
+            </details>
+
+            <details class="card" id="enrich"><summary><strong>Public work</strong> <span class="small">GitHub, portfolio, publications</span></summary>
+              <p id="enrich-links" class="small"></p>
+              <form id="expand-form"><label>Additional public links <input id="expand-urls" placeholder="https://github.com/you, https://your-portfolio.example"></label><div class="form-footer"><p class="small">Codex opens these pages with live search and proposes competencies they demonstrate. Nothing is added until you confirm it. LinkedIn pages need a sign-in and are skipped.</p><button class="secondary" type="submit">Scan public profiles ↗</button></div></form>
+              <div id="expand-results"></div>
+            </details>
+          </section>
+        </div>
+      </div>
+
+      <!-- JOBS --------------------------------------------------------------->
+      <div class="view" data-view="jobs" hidden>
+        <div id="jobs-empty" class="empty panel"><span>↗</span><p>Start with your CV in <a href="#/profile">Profile</a>. Pyxida then searches Swiss vacancies for you.</p></div>
+        <section id="shortlist" class="panel">
+          <div class="section-heading"><span class="step-number">02</span><div><h2>Find jobs</h2><p>Current Swiss listings, scored against your experience, languages and preferences.</p></div></div>
+          <details id="evaluate-box" class="card"><summary><strong>Evaluate a specific posting</strong> <span class="small">URL or pasted text</span></summary>
+            <form id="evaluate-form">
+              <label>Listing URL <input id="evaluate-url" type="url" placeholder="https://careers.example.ch/jobs/123"></label>
+              <label>Or paste the job description <textarea id="evaluate-text" rows="6" maxlength="30000" placeholder="Paste the full listing when a site blocks automated access…"></textarea></label>
+              <div class="form-footer"><p class="small">Pasted text is checked for hidden or injected instructions before Codex reads it. The evaluation scores skills, experience, culture and career fit, and checks language, work-permit and location gates.</p><button class="secondary" type="submit">Evaluate this posting ↗</button></div>
+            </form>
+          </details>
+          <details id="search-box" class="card" open><summary><strong>Search preferences</strong> <span class="small" id="portal-note"></span></summary>
+            <form id="search-form">
+              <div class="preference-grid">
+                <label>Locations <input id="cities" placeholder="Anywhere in Switzerland"></label>
+                <label>Work arrangement <select id="work-style"><option value="">Any arrangement</option><option>On-site</option><option>Hybrid preferred</option><option>Remote required</option></select></label>
+                <label>Salary expectations <input id="salary" placeholder="Optional · e.g. CHF 100,000+"></label>
+                <label>Sector focus <input id="focus" value="AML, KYC, financial crime, finance and banking; include relevant adjacent roles"></label>
+                <label>Work authorization <select id="permit"><option value="">Not stated</option><option>Swiss citizen</option><option>C permit (settled)</option><option>B permit (residence)</option><option>G permit (cross-border commuter)</option><option>EU/EFTA citizen, permit not yet issued</option><option>Non-EU/EFTA citizen, needs sponsorship</option></select></label>
+                <label>Search depth <select id="depth"><option value="standard">Standard · one pass, about 12 listings</option><option value="deep">Deep · portal by portal, up to 25 listings</option></select></label>
+              </div>
+              <label>Anything else that matters? <textarea id="constraints" rows="2" placeholder="Workload, languages, availability, hard constraints or roles to avoid…"></textarea></label>
+              <div class="form-footer"><p class="small">All preferences are optional. Listings you dismissed or applied to are skipped. Deep search runs one Codex search per few portals plus employer career pages, so it uses more of your plan. Choose which portals to search in <a href="#/settings">Settings</a>.</p><button id="search-button" class="primary" type="submit" disabled>Find suitable jobs <span>↗</span></button></div>
+            </form>
+          </details>
+          <div id="stale" class="notice" hidden>Your profile has changed. Search again or re-evaluate selected postings before preparing applications.</div>
+          <div class="results-heading" id="results-heading" hidden><div><h3 id="results-count"></h3><p id="search-summary" class="small"></p></div><label class="sort-label">Show <select id="fit-filter"><option value="">All matches</option><option>Strong</option><option>Plausible</option><option>Stretch</option><option value="selected">Selected only</option></select></label></div>
+          <div id="selection-bar" class="selection-bar" hidden><span id="selection-text"></span><a href="#/applications" class="primary-link">Prepare applications ↗</a></div>
+          <div id="jobs" class="job-list"></div>
+          <details id="vetoed-container" class="side-list" hidden><summary id="vetoed-summary"></summary><p class="small">These listings fail a hard gate (a language you have not declared, a work-authorization requirement, or a location constraint). Review them if your circumstances have changed.</p><div id="vetoed" class="job-list"></div></details>
+          <details id="dismissed-container" class="side-list" hidden><summary id="dismissed-summary"></summary><ul id="dismissed" class="plain-list"></ul></details>
+          <details id="coverage-container" class="side-list" hidden><summary>Portal coverage for the last search</summary><ul id="coverage" class="plain-list"></ul></details>
+          <details id="sources-container" class="side-list" hidden><summary>Research sources</summary><ul id="sources" class="source-list"></ul></details>
+        </section>
+      </div>
+
+      <!-- APPLICATIONS ------------------------------------------------------->
+      <div class="view" data-view="applications" hidden>
+        <section id="applications" class="panel">
+          <div class="section-heading"><span class="step-number">03</span><div><h2>Applications</h2><p>Tailored, reviewable drafts for the jobs you choose.</p></div></div>
+          <div class="application-controls"><p id="selected-count">Select jobs in <a href="#/jobs">Jobs</a> to begin.</p><label>Draft language <select id="draft-language"><option>English</option><option>German</option><option>French</option><option>Italian</option></select></label><label class="check"><input id="review-pass" type="checkbox" checked> Independent review</label><button id="prepare" class="primary" disabled>Prepare selected applications ↗</button></div>
+          <p class="small">Each package includes a tailored CV, cover letter, email draft and evidence notes. Pyxida renders the PDFs, checks them for applicant tracking systems, and shortens drafts that run past two pages (CV) or one page (letter). The independent review researches the employer, critiques the drafts and revises them, using two or three extra Codex runs. Picture and layout options are in <a href="#/settings">Settings</a>.</p>
+          <div id="drafts"></div>
+        </section>
+      </div>
+
+      <!-- PIPELINE ----------------------------------------------------------->
+      <div class="view" data-view="pipeline" hidden>
+        <section id="pipeline" class="panel">
+          <div class="section-heading"><span class="step-number">04</span><div><h2>Pipeline & interviews</h2><p>Track every application, follow up on time, and prepare for each interview round.</p></div></div>
+          <div id="pipeline-empty" class="empty"><span>◎</span><p>Applications appear here once you prepare drafts or record that you applied.</p></div>
+          <div id="pipeline-content" hidden>
+            <div id="stat-cards" class="stat-cards"></div>
+            <div id="funnel" class="funnel" aria-label="Application funnel"></div>
+            <details class="card" id="calibration-card"><summary><strong>Calibrate from outcomes</strong> <span id="calibration-summary" class="small"></span></summary><div id="calibration-content"></div></details>
+            <div class="pipeline-actions"><label>Show <select id="status-filter"><option value="">Open applications</option><option value="due">Follow-up due</option><option value="all">All applications</option></select></label><a id="export-csv" class="download">Export CSV ↓</a><a id="export-report" class="download">Offline report ↓</a></div>
+            <div id="applications-list"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- GROWTH ------------------------------------------------------------->
+      <div class="view" data-view="growth" hidden>
+        <section id="growth" class="panel">
+          <div class="section-heading"><span class="step-number">05</span><div><h2>Skills & growth</h2><p>See which gaps recur across your target jobs, and a plan to close them.</p></div></div>
+          <div class="form-footer"><p class="small">Analyses the requirements of your shortlist and tracked applications. Codex uses live search to find learning resources; your CV text and contact details are not sent to search.</p><button id="upskill-button" class="primary" type="button" disabled>Analyse my skill gaps <span>↗</span></button></div>
+          <div id="upskill-results"></div>
+        </section>
+      </div>
+
+      <!-- SETTINGS ----------------------------------------------------------->
+      <div class="view" data-view="settings" hidden>
+        <section class="panel" id="codex-settings">
+          <div class="section-heading"><span class="step-number">06</span><div><h2>Codex connection</h2><p>Pyxida uses your ChatGPT plan through the Codex CLI. No API key is needed.</p></div></div>
+          <div id="codex-status"></div>
+          <div id="codex-login"></div>
+        </section>
+
+        <section class="panel" id="portals" hidden>
+          <div class="section-heading"><span class="step-number">⌕</span><div><h2>Job portals</h2><p>Where Pyxida searches, alongside employer career pages.</p></div></div>
+          <p class="small">Codex searches these portals with live web search, then opens each listing on the employer's or portal's own page. Turn portals off, or add one for your field.</p>
+          <ul id="portal-list" class="portal-list"></ul>
+          <form id="portal-form" class="row"><label>Portal name <input id="portal-name" maxlength="60" placeholder="e.g. Finews Jobs"></label><label>Website <input id="portal-domain" maxlength="200" placeholder="jobs.example.ch"></label><button class="secondary small-button" type="submit">Add portal</button></form>
+        </section>
+
+        <section class="panel" id="document-appearance" hidden>
+          <div class="appearance-intro"><div class="eyebrow">DOCUMENT DESIGN</div><h3>One considered look. Every application.</h3><p>Source Serif 4 letterheads, Source Sans 3 body text, and carefully spaced A4 pages.</p></div>
+          <div class="photo-editor">
+            <div class="photo-stage">
+              <div id="photo-placeholder"><span>+</span><p>Applicant picture<br><small>Optional</small></p></div>
+              <img id="saved-photo" alt="Saved applicant portrait" hidden>
+              <canvas id="photo-canvas" width="640" height="800" aria-label="Cropped applicant picture preview" hidden></canvas>
+            </div>
+            <div class="photo-fields">
+              <label>Choose a picture<input id="photo-file" type="file" accept="image/jpeg,image/png,image/webp"></label>
+              <p class="small">JPEG, PNG or WebP · up to 5 MB. Saved with your profile and used only in document layouts.</p>
+              <div id="crop-controls" class="crop-controls" hidden>
+                <label>Zoom<input id="photo-zoom" type="range" min="1" max="3" step="0.01" value="1"></label>
+                <label>Horizontal position<input id="photo-x" type="range" min="0" max="100" step="1" value="50"></label>
+                <label>Vertical position<input id="photo-y" type="range" min="0" max="100" step="1" value="50"></label>
+              </div>
+              <div class="photo-options"><label><input id="photo-on-cv" type="checkbox" checked> Picture on CV</label><label><input id="photo-on-letter" type="checkbox"> Picture on cover letter</label></div>
+              <div class="photo-buttons"><button id="save-appearance" class="secondary" type="button">Save appearance</button><button id="remove-photo" class="text-button danger" type="button" hidden>Remove picture</button><span id="appearance-status" class="small" role="status" aria-live="polite"></span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="access-settings" hidden>
+          <div class="section-heading"><span class="step-number">⚿</span><div><h2>Access</h2><p>This instance is password protected.</p></div></div>
+          <button id="sign-out" class="secondary" type="button">Sign out of Pyxida</button>
+        </section>
+      </div>
+
+      <footer>Pyxida · built around your experience. Every application is your decision.</footer>
+    </div>
+  </main>
+</body>
+</html>
