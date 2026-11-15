@@ -80,7 +80,7 @@ class Access:
 
 LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Pyxida · Sign in</title>
-<link rel="stylesheet" href="/styles.css"></head><body class="login-page"><main class="login-card">
+<link rel="stylesheet" href="/styles.css"><script src="/theme.js"></script></head><body class="login-page"><main class="login-card">
 <a class="brand"><span class="brand-mark">p.</span><span>pyxida<small>YOUR CAREER COMPASS</small></span></a>
 <h1>Sign in</h1><p class="small">This Pyxida instance is protected with a password.</p>
 <form method="post" action="/login"><label>Password <input type="password" name="password" autocomplete="current-password" required autofocus></label>

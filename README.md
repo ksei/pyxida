@@ -8,7 +8,8 @@ interviews. **No API key or target job title is required.**
 The interface has six pages: **Profile** (CV, discussion, supporting
 documents, career goals, writing style, public work), **Jobs**, **Applications**,
 **Pipeline**, **Growth** and **Settings** (Codex connection, job portals,
-document design, access).
+document design, access). The switch in the top bar picks a light or dark theme, or **Auto**
+to follow your system; the choice is remembered per browser.
 
 ## Run locally
 

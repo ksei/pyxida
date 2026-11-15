@@ -666,9 +666,10 @@ class Application:
 
 
 LOOPBACK = ("127.0.0.1", "localhost", "::1")
-PUBLIC_PATHS = {"/login", "/styles.css", "/healthz", "/favicon.svg"}
+PUBLIC_PATHS = {"/login", "/styles.css", "/theme.js", "/healthz", "/favicon.svg"}
 STATIC = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"),
-          "/photo-crop.js": ("photo-crop.js", "text/javascript"), "/styles.css": ("styles.css", "text/css"),
+          "/photo-crop.js": ("photo-crop.js", "text/javascript"), "/theme.js": ("theme.js", "text/javascript"),
+          "/styles.css": ("styles.css", "text/css"),
           "/favicon.svg": ("favicon.svg", "image/svg+xml")}
 
 

@@ -6,6 +6,7 @@
   <title>Pyxida · Your career compass</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
+  <script src="/theme.js"></script>
   <script src="/photo-crop.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
@@ -29,7 +30,7 @@
     <div class="sidebar-bottom"><span class="swiss-cross" id="region-mark">+</span> <span id="region-name">Switzerland</span><br><small>Powered by your Codex sign-in</small></div>
   </aside>
   <main>
-    <header class="topbar"><span id="view-title">Profile</span><a class="connection" id="connection" href="#/settings">Checking Codex…</a></header>
+    <header class="topbar"><span id="view-title">Profile</span><div class="topbar-actions"><button type="button" class="theme-toggle" id="theme-toggle">◐ Auto</button><a class="connection" id="connection" href="#/settings">Checking Codex…</a></div></header>
     <div class="page">
       <div id="setup" class="notice" hidden></div>
       <div id="activity" class="activity" role="status" aria-live="polite" hidden><span class="spinner"></span><span id="activity-text"></span></div>
