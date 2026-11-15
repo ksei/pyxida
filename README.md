@@ -131,6 +131,13 @@ stack. Treat that file like a password.
    HTML and invisible characters and quotes any instruction-shaped lines aimed
    at AI tools. Search coverage is limited to accessible pages and is not an
    exhaustive survey of all Swiss vacancies.
+   **When your profile changes later** (a new certificate, a correction, a
+   skill marked as acquired on the Growth page), every saved match is flagged.
+   **Re-score matches** scores them again in one Codex run from the saved
+   listing details (no new search), showing each score change and why. On a
+   draft, **Update with my current profile** re-scores that job if needed and
+   redrafts it; pipeline status, notes and form answers are kept, and a sent
+   application keeps the score it was sent with.
 4. Select listings and prepare applications in English, German, French or
    Italian. Codex checks each listing again and creates a tailored CV,
    cover letter, email draft and review notes. With **Independent review**
@@ -163,6 +170,10 @@ stack. Treat that file like a password.
 6. **Skills & growth** maps recurring gaps across your shortlist and tracked
    jobs into a prioritized heatmap with a learning plan, live-searched resources
    and a study order, and shows which gaps are new or closed since the last run.
+   Once you have a skill, use **I have this now** on its row or plan card and
+   say how you got it (course, certificate, level, project). It is added to your
+   profile as your own statement, so drafts can cite it, and your matches are
+   flagged for re-scoring.
 
 CVs and cover letters pair **Source Serif 4** names with **Source Sans 3** body
 text, 19 mm A4 margins, navy rules, a clear heading hierarchy and consistent

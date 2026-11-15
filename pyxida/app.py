@@ -407,6 +407,13 @@ class Application:
         if (existing and existing["revision"] == state["revision"]
                 and existing["language"] == language and not data.get("regenerate", False)):
             return
+        self.write_draft(state, job, language, review)
+
+    def write_draft(self, state, job, language, review):
+        """Draft (or redraft) one application from the current profile. Pipeline history and
+        form answers already collected for this job are kept."""
+        job_id = job["id"]
+        previous = state["drafts"].get(job_id) or {}
         draft = {"job": job, "language": language, "revision": state["revision"], "reviewed": review}
         draft["materials"] = self.agent.materials(
             state["cv"], state["discussion"], state["profile"], job, language,
@@ -414,10 +421,74 @@ class Application:
             checker=lambda materials: self.checks(state, {"job": job, "materials": materials}),
             style=state["style"], country=get_region(state["region"])["name"], **self.candidate(state))
         draft["checks"] = self.checks(state, draft)
+        if previous.get("form_answers"):
+            draft["form_answers"] = previous["form_answers"]
         state["drafts"][job_id] = draft
         if job_id not in state["applications"]:
             state["applications"][job_id] = tracker.record(None, job, "drafted")
         self.remember(state, [job])
+
+    def refresh_draft(self, state, data):
+        """Bring one application up to date after a profile change: score the job again if it
+        was scored against an earlier profile, then redraft in the same language and mode."""
+        job_id = data.get("job_id")
+        draft = state["drafts"].get(job_id)
+        if not draft:
+            raise WorkflowError("Prepare drafts for this job first.")
+        if draft["revision"] == state["revision"]:
+            raise WorkflowError("These drafts already use your current profile.")
+        shortlist = state["shortlist"] or {}
+        listed = next((j for j in shortlist.get("jobs", []) + shortlist.get("vetoed", []) if j["id"] == job_id), None)
+        job = listed or draft["job"]
+        if job.get("revision", state["search_revision"]) != state["revision"]:
+            job = self.rescore_jobs(state, [job]).get(job_id)
+            if not job:
+                raise WorkflowError("Codex did not return a new score for this job. Please retry.", retryable=True)
+            if listed:
+                self.place_rescored(state, {job_id: job})
+        self.write_draft(state, job, draft["language"], draft.get("reviewed", True))
+
+    # Re-scoring -------------------------------------------------------------------
+    def stale_jobs(self, state):
+        shortlist = state["shortlist"] or {}
+        return [j for j in shortlist.get("jobs", []) + shortlist.get("vetoed", [])
+                if j.get("revision", state["search_revision"]) != state["revision"]]
+
+    def rescore_jobs(self, state, jobs):
+        """Score saved jobs against the current profile, without a new web search."""
+        prefs = preference_values(state["preferences"], state["region"])
+        rescored = self.agent.rescore(state["profile"], prefs, self.evidence(state), jobs,
+                                      history=tracker.history_for_ranking(state["applications"]),
+                                      context=self.context(state))
+        for job in rescored.values():
+            job["revision"] = state["revision"]
+            application = state["applications"].get(job["id"])
+            # Unsent applications follow the new score; sent ones keep the score they were sent with.
+            if application and application["status"] == "drafted":
+                application["job"] = {**application["job"], **tracker.job_summary(job)}
+        return rescored
+
+    @staticmethod
+    def place_rescored(state, rescored):
+        """Swap re-scored jobs into the shortlist; a job moves between matches and vetoed when a gate changes."""
+        shortlist = state["shortlist"]
+        everything = [rescored.get(j["id"], j) for j in shortlist["jobs"] + shortlist.get("vetoed", [])]
+        shortlist["jobs"] = sorted((j for j in everything if not j.get("vetoes")),
+                                   key=lambda j: (j.get("listing_status") != "Open", -j.get("overall", 0)))
+        shortlist["vetoed"] = [j for j in everything if j.get("vetoes")]
+        valid = {j["id"] for j in shortlist["jobs"]}
+        state["selected"] = [i for i in state["selected"] if i in valid]
+
+    def rescore(self, state, data):
+        stale = self.stale_jobs(state)
+        if not stale:
+            raise WorkflowError("Every match is already scored against your current profile.")
+        rescored = self.rescore_jobs(state, stale)
+        if not rescored:
+            raise WorkflowError("Codex did not return new scores. Please retry.", retryable=True)
+        self.place_rescored(state, rescored)
+        state["shortlist"]["rescored"] = {"date": tracker.today().isoformat(), "revision": state["revision"],
+                                          "count": len(rescored), "missing": len(stale) - len(rescored)}
 
     def recheck(self, state, data):
         draft = state["drafts"].get(data.get("job_id"))
@@ -569,6 +640,22 @@ class Application:
                       created=tracker.today().isoformat())
         state["upskill"] = result
 
+    def skill_acquired(self, state, data):
+        """The candidate now has a skill from the growth plan: record it as their own statement
+        in the discussion (so drafts can cite it) and mark it in the plan."""
+        skill = data.get("skill")
+        upskill = state["upskill"] or {}
+        items = [i for i in upskill.get("gaps", []) + upskill.get("plan", [])
+                 if isinstance(skill, str) and i["skill"].casefold() == skill.strip().casefold()]
+        if not items:
+            raise WorkflowError("Choose a skill from your growth plan.")
+        details = tracker.text_field(data.get("details"), "details", 1000)
+        if len(details) < 10:
+            raise WorkflowError("Say briefly how you acquired it (a course, certificate, level or project), so drafts can cite it.")
+        self.rediscuss(state, f'Update to my profile: I have now acquired "{items[0]["skill"]}". {details}')
+        for item in items:
+            item["acquired"] = {"date": tracker.today().isoformat(), "details": details}
+
     # Supporting documents, career profile, style and calibration -----------------
     def documents(self, state, data):
         action = choice(data, "action", ("add", "remove"))
@@ -659,10 +746,11 @@ class Application:
               "/api/career": career, "/api/style": style, "/api/calibrate": calibrate, "/api/expand": expand, "/api/expand-confirm": expand_confirm,
               "/api/search": search, "/api/evaluate": evaluate, "/api/dismiss": dismiss, "/api/portals": portals, "/api/region": region,
               "/api/selection": selection, "/api/materials": materials, "/api/checks": recheck,
+              "/api/rescore": rescore, "/api/refresh-draft": refresh_draft,
               "/api/form-answers": form_answers, "/api/document-settings": document_settings,
               "/api/track": track, "/api/note": note, "/api/untrack": untrack, "/api/followup": followup,
               "/api/followup-sent": followup_sent, "/api/interview-prep": interview_prep, "/api/mock": mock,
-              "/api/upskill": upskill}
+              "/api/upskill": upskill, "/api/skill-acquired": skill_acquired}
 
 
 LOOPBACK = ("127.0.0.1", "localhost", "::1")

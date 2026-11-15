@@ -121,7 +121,8 @@
               <div class="form-footer"><p class="small">All preferences are optional. Listings you dismissed or applied to are skipped. Deep search runs one Codex search per few portals plus employer career pages, so it uses more of your plan. Choose the country and which portals to search in <a href="#/settings">Settings</a>.</p><button id="search-button" class="primary" type="submit" disabled>Find suitable jobs <span>↗</span></button></div>
             </form>
           </details>
-          <div id="stale" class="notice" hidden>Your profile has changed. Search again or re-evaluate selected postings before preparing applications.</div>
+          <div id="stale" class="notice stale-banner" hidden><span id="stale-text"></span><button id="rescore" type="button" class="secondary small-button">Re-score matches ↗</button></div>
+          <div id="rescore-result" class="notice quiet" hidden></div>
           <div class="results-heading" id="results-heading" hidden><div><h3 id="results-count"></h3><p id="search-summary" class="small"></p></div><label class="sort-label">Show <select id="fit-filter"><option value="">All matches</option><option>Strong</option><option>Plausible</option><option>Stretch</option><option value="selected">Selected only</option></select></label></div>
           <div id="selection-bar" class="selection-bar" hidden><span id="selection-text"></span><a href="#/applications" class="primary-link">Prepare applications ↗</a></div>
           <div id="jobs" class="job-list"></div>

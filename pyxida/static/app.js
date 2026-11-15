@@ -154,6 +154,42 @@ function jobStale(job) {
   return (job.revision ?? state.search_revision) !== state.revision;
 }
 
+function staleJobs() {
+  const list = state?.shortlist;
+  return list ? [...(list.jobs || []), ...(list.vetoed || [])].filter(jobStale) : [];
+}
+
+function plural(count, word, suffix = 's') {
+  return `${count} ${word}${count === 1 ? '' : suffix}`;
+}
+
+function scoreChange(job) {
+  if (!job.previous || job.previous.overall == null || jobStale(job)) return null;
+  const delta = job.overall - job.previous.overall;
+  if (!delta) return chip('Score unchanged');
+  return chip(`${delta > 0 ? '↑' : '↓'} ${Math.abs(delta)} since profile update`, delta > 0 ? 'ok-chip' : 'flag-chip');
+}
+
+function renderRescore() {
+  const stale = staleJobs();
+  $('#stale').hidden = !stale.length;
+  $('#stale-text').textContent = `Your profile changed. ${plural(stale.length, 'match', 'es')} ${stale.length === 1 ? 'was' : 'were'} scored against the earlier version${selectedJobs().some(jobStale) ? ', including jobs you selected' : ''}.`;
+  $('#rescore').textContent = `Re-score ${stale.length === 1 ? 'it' : plural(stale.length, 'match', 'es')} ↗`;
+  const done = state?.shortlist?.rescored;
+  const result = $('#rescore-result');
+  result.hidden = !done || done.revision !== state.revision;
+  if (result.hidden) return;
+  const changed = [...state.shortlist.jobs, ...(state.shortlist.vetoed || [])].filter(j => j.previous && !jobStale(j));
+  const up = changed.filter(j => j.overall > j.previous.overall).length;
+  const down = changed.filter(j => j.overall < j.previous.overall).length;
+  const blocked = changed.filter(j => j.vetoes?.length && !j.previous.vetoed).length;
+  const cleared = changed.filter(j => !j.vetoes?.length && j.previous.vetoed).length;
+  const parts = [up && `${up} improved`, down && `${down} dropped`, blocked && `${blocked} now blocked by a gate`,
+    cleared && `${cleared} no longer blocked`].filter(Boolean);
+  result.textContent = `Re-scored ${plural(done.count, 'match', 'es')} against your updated profile: ${parts.join(', ') || 'no score changed'}.`
+    + (done.missing ? ` ${done.missing} could not be re-scored; try again.` : '');
+}
+
 function selectedJobs() {
   const jobs = state?.shortlist?.jobs || [];
   return (state?.selected || []).map(id => jobs.find(j => j.id === id)).filter(Boolean);
@@ -294,7 +330,7 @@ function renderJobCard(job, { vetoed = false } = {}) {
   const heading = node('div');
   const badges = el('div', 'badges',
     node('span', job.overall != null ? `${job.fit} match · ${job.overall}/100` : `${job.fit} match`, 'fit ' + (job.fit || '').toLowerCase()),
-    job.new && chip('New'), job.source === 'manual' && chip('Your posting'), deadlineChip(job), ...gateChips(job));
+    scoreChange(job), job.new && chip('New'), job.source === 'manual' && chip('Your posting'), deadlineChip(job), ...gateChips(job));
   heading.append(badges, node('h4', job.title), node('p', `${job.company} · ${job.location}`, 'company'));
   top.append(heading);
   if (!vetoed) {
@@ -319,8 +355,9 @@ function renderJobCard(job, { vetoed = false } = {}) {
     if (job.integrity.findings.instructions.length) notice.append(bullets(job.integrity.findings.instructions.map(l => `“${l}”`)));
     card.append(notice);
   }
-  if (jobStale(job)) card.append(node('p', 'Your profile changed after this evaluation. Search again or evaluate this posting again before drafting.', 'notice'));
+  if (jobStale(job)) card.append(node('p', 'Your profile changed after this evaluation. Use the re-score button above to update it before drafting.', 'notice'));
   card.append(node('p', job.why, 'why'));
+  if (job.rescore_note && !jobStale(job)) card.append(node('p', `After your profile update: ${job.rescore_note}`, 'small rescore-note'));
   const meta = node('div', undefined, 'job-meta');
   [job.work_style, job.language, job.salary].forEach(value => value && meta.append(node('span', value)));
   card.append(meta);
@@ -544,7 +581,19 @@ function renderDrafts() {
     const download = node('a', 'Download PDF & Word package ↓', 'download');
     download.href = `/api/export?id=${encodeURIComponent(state.id)}&job=${encodeURIComponent(id)}`;
     heading.append(title, download); card.append(heading);
-    if (draft.revision !== state.revision) card.append(node('p', 'These drafts use an earlier profile. Prepare them again after refreshing your shortlist.', 'notice'));
+    if (draft.revision !== state.revision) {
+      const notice = node('div', undefined, 'notice stale-banner');
+      notice.append(node('span', 'These drafts use an earlier profile. Updating scores this job against your current profile and redrafts it; your pipeline status and notes stay as they are.'),
+        button('Update with my current profile ↗', () => act('Codex is updating this application with your current profile…', '/api/refresh-draft', { job_id: id })));
+      card.append(notice);
+    } else if (draft.job.previous && !jobStale(draft.job) && draft.job.previous.overall !== draft.job.overall) {
+      card.append(node('p', `Fit after your profile update: ${draft.job.previous.overall} → ${draft.job.overall}/100 (${draft.job.fit}). ${draft.job.rescore_note || ''}`, 'small rescore-note'));
+    }
+    if (draft.job.vetoes?.length) {
+      const warning = node('div', undefined, 'notice error');
+      warning.append(node('strong', 'A hard requirement no longer passes: '), bullets(draft.job.vetoes));
+      card.append(warning);
+    }
     card.append(trackForm(id, state.applications[id]));
     if (draft.checks) card.append(checksBlock(id, draft));
     if (draft.materials.review) card.append(reviewBlock(draft.materials.review));
@@ -749,19 +798,42 @@ function renderPipeline() {
 }
 
 // Growth & enrichment ---------------------------------------------------------
+function acquiredControl(item) {
+  if (item.acquired) {
+    return el('div', 'acquired', chip('Acquired ✓', 'ok-chip'),
+      node('span', ` ${item.acquired.date} · ${item.acquired.details}`, 'small'));
+  }
+  const box = node('details', undefined, 'acquire');
+  const details = node('textarea');
+  details.rows = 2; details.maxLength = 1000; details.disabled = busy;
+  details.placeholder = 'How you acquired it, e.g. “Goethe B2 certificate, March 2026” or “Completed the PortSwigger labs on access control”';
+  details.setAttribute('aria-label', `How you acquired ${item.skill}`);
+  box.append(node('summary', 'I have this now'), details,
+    node('p', 'This is added to your profile as your own statement, so drafts can cite it. To attach proof, upload the certificate under Profile → Supporting documents.', 'small'),
+    button('Save to my profile ↗', () => act('Codex is updating your profile with this skill…', '/api/skill-acquired', { skill: item.skill, details: details.value })));
+  return box;
+}
+
 function renderGrowth() {
   const result = state?.upskill;
   $('#upskill-results').replaceChildren();
   if (!result) return;
   const box = $('#upskill-results');
   box.append(node('p', `${result.summary} (${result.jobs_analysed} jobs analysed on ${result.created})`, 'small'));
+  const stale = staleJobs().length;
+  if (stale && [...result.gaps, ...result.plan].some(i => i.acquired)) {
+    const notice = node('p', undefined, 'notice quiet');
+    const jobs = node('a', `re-score ${plural(stale, 'match', 'es')} on the Jobs page`); jobs.href = '#/jobs';
+    notice.append(document.createTextNode('Your profile now includes the skills you marked as acquired. To see how that changes your fit, '), jobs, document.createTextNode('.'));
+    box.append(notice);
+  }
   const table = node('table', undefined, 'gap-table');
   table.append(el('tr', '', node('th', 'Skill'), node('th', 'Status'), node('th', 'Jobs needing it'), node('th', 'Priority')));
   const top = Math.max(result.jobs_analysed, 1);
   result.gaps.forEach(g => {
     const bar = el('div', 'bar heat-' + g.priority, node('span'));
     bar.firstChild.style.width = `${Math.round(100 * g.jobs / top)}%`;
-    table.append(el('tr', '', el('td', '', node('strong', g.skill), g.new && chip('New'), node('p', g.why, 'small')),
+    table.append(el('tr', g.acquired ? 'is-acquired' : '', el('td', '', node('strong', g.skill), g.new && chip('New'), node('p', g.why, 'small'), acquiredControl(g)),
       node('td', g.status), el('td', 'bar-cell', bar, node('span', ` ${g.jobs}`, 'small')), el('td', '', chip(g.priority, 'sev-' + g.priority))));
   });
   box.append(el('div', 'table-scroll', table));
@@ -774,7 +846,7 @@ function renderGrowth() {
     items.forEach(p => {
       const resources = node('ul', undefined, 'source-list');
       p.resources.forEach(r => resources.append(el('li', '', link(r.url, r.title))));
-      grid.append(el('article', 'role-card', node('span', `about ${p.hours} hours`, 'seniority'), node('h4', p.skill), bullets(p.steps), resources));
+      grid.append(el('article', 'role-card' + (p.acquired ? ' is-acquired' : ''), node('span', `about ${p.hours} hours`, 'seniority'), node('h4', p.skill), bullets(p.steps), resources, acquiredControl(p)));
     });
     box.append(grid);
   }
@@ -1010,7 +1082,7 @@ function render() {
   $('#shortlist').hidden = !state;
   $('#results-heading').hidden = !state?.shortlist;
   $('#sources-container').hidden = !state?.shortlist?.sources?.length;
-  $('#stale').hidden = !state?.shortlist || !selectedJobs().some(jobStale);
+  renderRescore();
   const selected = state?.selected.length || 0;
   $('#selection-bar').hidden = !selected;
   $('#selection-text').textContent = `${selected} job${selected === 1 ? '' : 's'} selected.`;
@@ -1159,6 +1231,7 @@ $('#prepare').addEventListener('click', () => run('Preparing your applications�
   }
 }));
 
+$('#rescore').addEventListener('click', () => act('Codex is re-scoring your matches against your updated profile…', '/api/rescore', {}));
 $('#upskill-button').addEventListener('click', () => act('Codex is mapping your skill gaps and finding learning resources…', '/api/upskill', {}));
 $('#status-filter').addEventListener('change', renderPipeline);
 $('#draft-language').addEventListener('change', controls);
